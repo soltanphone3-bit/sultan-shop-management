@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101522">
+  <title>World Clock</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #101522;
+      color: #f4f6fb;
+      font-synthesis: none;
+    }
+    * { box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      background: radial-gradient(ellipse at 50% -20%, #263653 0, #101522 58%);
+    }
+    main { width: min(1120px, calc(100% - 40px)); margin: 0 auto; padding: 64px 0 48px; }
+    header { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-bottom: 36px; }
+    .eyebrow { color: #96a9ce; font-size: .76rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+    h1 { margin: 8px 0 0; font-size: clamp(2rem, 5vw, 3.25rem); letter-spacing: -.055em; }
+    .subtitle { margin: 10px 0 0; color: #a7b0c2; }
+    .live { display: flex; align-items: center; gap: 9px; color: #a7b0c2; font-size: .9rem; white-space: nowrap; }
+    .live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #68e0ae; box-shadow: 0 0 14px #68e0ae; }
+    .toolbar { display: flex; justify-content: flex-end; margin-bottom: 18px; }
+    select, button { font: inherit; color: #f4f6fb; border: 1px solid #354159; border-radius: 10px; background: #1b2434; }
+    select { min-width: 220px; padding: 11px 38px 11px 14px; }
+    select:focus-visible, button:focus-visible { outline: 2px solid #82aaff; outline-offset: 3px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+    .clock { position: relative; min-height: 185px; padding: 24px; border: 1px solid #2b3549; border-radius: 18px; background: linear-gradient(145deg, rgba(33, 44, 64, .94), rgba(24, 31, 46, .94)); box-shadow: 0 16px 38px #05081130; }
+    .clock-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+    .city { margin: 0; font-size: 1.15rem; font-weight: 650; }
+    .zone { margin-top: 5px; color: #99a7bf; font-size: .82rem; }
+    .remove { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border-radius: 9px; color: #aab4c7; cursor: pointer; font-size: 1.15rem; }
+    .remove:hover { color: #fff; background: #343f55; }
+    .time { margin-top: 23px; font-size: clamp(2rem, 5vw, 2.65rem); font-variant-numeric: tabular-nums; letter-spacing: -.045em; }
+    .date { margin-top: 5px; color: #aab4c7; font-size: .9rem; }
+    .empty { grid-column: 1 / -1; padding: 42px; border: 1px dashed #354159; border-radius: 18px; color: #aab4c7; text-align: center; }
+    footer { margin-top: 30px; color: #77849b; text-align: center; font-size: .8rem; }
+    @media (max-width: 600px) { main { width: min(100% - 28px, 1120px); padding-top: 38px; } header { align-items: flex-start; flex-direction: column; margin-bottom: 26px; } .toolbar, select { width: 100%; } .toolbar { justify-content: stretch; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <div class="eyebrow">A little time, everywhere</div>
+        <h1>World Clock</h1>
+        <p class="subtitle">The current time, wherever you need it.</p>
+      </div>
+      <div class="live" aria-label="Clock updates live">Live</div>
+    </header>
+    <div class="toolbar">
+      <label for="zone-picker" class="visually-hidden" style="position:absolute;clip:rect(0,0,0,0)">Add a time zone</label>
+      <select id="zone-picker" aria-label="Add a time zone">
+        <option value="">＋ Add a time zone</option>
+      </select>
+    </div>
+    <section class="grid" id="clocks" aria-label="Clocks by time zone" aria-live="polite"></section>
+    <footer>Times are shown in your browser's local time-zone database.</footer>
+  </main>
+  <script>
+    (() => {
+      const defaultZones = [
+        { city: "London", zone: "Europe/London" },
+        { city: "New York", zone: "America/New_York" },
+        { city: "Tokyo", zone: "Asia/Tokyo" },
+        { city: "Dubai", zone: "Asia/Dubai" },
+        { city: "Sydney", zone: "Australia/Sydney" }
+      ];
+      const storageKey = "world-clock-zones-v1";
+      const clocks = document.querySelector("#clocks");
+      const picker = document.querySelector("#zone-picker");
+      let zones;
+      try {
+        const saved = JSON.parse(localStorage.getItem(storageKey));
+        zones = Array.isArray(saved) ? saved.filter(item => item && typeof item.city === "string" && typeof item.zone === "string") : defaultZones;
+      } catch {
+        zones = defaultZones;
+      }
+      const availableZones = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [
+        "Africa/Cairo", "America/Chicago", "America/Los_Angeles", "America/New_York", "Asia/Dubai", "Asia/Kolkata", "Asia/Singapore", "Asia/Tokyo", "Australia/Sydney", "Europe/Berlin", "Europe/London", "Europe/Paris", "Pacific/Auckland"
+      ];
+      const prettyCity = zone => zone.split("/").pop().replaceAll("_", " ");
+      for (const zone of availableZones) {
+        const option = document.createElement("option");
+        option.value = zone;
+        option.textContent = `${prettyCity(zone)} · ${zone}`;
+        picker.append(option);
+      }
+      function save() {
+        try { localStorage.setItem(storageKey, JSON.stringify(zones)); } catch { /* Storage may be disabled; clocks still work. */ }
+      }
+      function render() {
+        clocks.replaceChildren();
+        if (!zones.length) {
+          const empty = document.createElement("div");
+          empty.className = "empty";
+          empty.textContent = "No clocks yet. Add a time zone to get started.";
+          clocks.append(empty);
+          return;
+        }
+        const now = new Date();
+        zones.forEach(({ city, zone }, index) => {
+          const card = document.createElement("article");
+          card.className = "clock";
+          const top = document.createElement("div");
+          top.className = "clock-top";
+          const heading = document.createElement("div");
+          const name = document.createElement("h2");
+          name.className = "city";
+          name.textContent = city;
+          const label = document.createElement("div");
+          label.className = "zone";
+          label.textContent = zone;
+          heading.append(name, label);
+          const remove = document.createElement("button");
+          remove.className = "remove";
+          remove.type = "button";
+          remove.textContent = "×";
+          remove.setAttribute("aria-label", `Remove ${city} clock`);
+          remove.addEventListener("click", () => { zones.splice(index, 1); save(); render(); });
+          top.append(heading, remove);
+          const time = document.createElement("div");
+          time.className = "time";
+          time.textContent = new Intl.DateTimeFormat(undefined, { timeZone: zone, hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(now);
+          const date = document.createElement("div");
+          date.className = "date";
+          date.textContent = new Intl.DateTimeFormat(undefined, { timeZone: zone, weekday: "long", year: "numeric", month: "long", day: "numeric" }).format(now);
+          card.append(top, time, date);
+          clocks.append(card);
+        });
+      }
+      picker.addEventListener("change", () => {
+        const zone = picker.value;
+        if (!zone) return;
+        if (!zones.some(item => item.zone === zone)) zones.push({ city: prettyCity(zone), zone });
+        save();
+        picker.value = "";
+        render();
+      });
+      render();
+      setInterval(render, 1000);
+    })();
+  </script>
+</body>
+</html>
